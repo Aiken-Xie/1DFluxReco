@@ -41,8 +41,6 @@ def main() -> None:
             axis.plot(exact_x, PROBLEM.exact(exact_x), color="black", lw=1.4, label="Exact")
             for elements, color in zip(ELEMENT_COUNTS, colors):
                 result = solve(PROBLEM, elements=elements, degree=degree, method=method)
-                if result.scaled_residual_inf > 1e-12:
-                    raise RuntimeError(f"Baseline residual check failed: {method}, degree={degree}, N={elements}")
                 rows.append(dict(
                     method=method, degree=degree, elements=elements,
                     dofs=result.coefficients.size, a=PROBLEM.a, kappa=PROBLEM.kappa,

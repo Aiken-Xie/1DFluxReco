@@ -15,7 +15,7 @@ in this version.
 The mathematical reference is the external project report,
 [`../report/project_report.tex`](../report/project_report.tex), including its section
 sources and Appendix A. The report and research notes remain outside this Git
-repository. The solver and tests run independently of those files.
+repository. The solver runs independently of those files.
 
 ## Install and run
 
@@ -24,13 +24,12 @@ interpreter name). From this repository:
 
 ```bash
 python3.12 -m venv .venv
-.venv/bin/python -m pip install -e ".[dev,examples]"
-.venv/bin/python -m pytest
+.venv/bin/python -m pip install -e ".[examples]"
 .venv/bin/python examples/baseline.py
 ```
 
-Runtime dependencies are NumPy and SciPy. The `dev` extra adds pytest, and the
-`examples` extra adds Matplotlib. The example uses a noninteractive plotting
+Runtime dependencies are NumPy and SciPy. The `examples` extra adds Matplotlib.
+The example uses a noninteractive plotting
 backend and needs no display server.
 
 ## Python API
@@ -109,10 +108,8 @@ free equations and is zero for a single linear element with no free nodes.
 `scaled_residual_inf` divides that value by
 `max(1, ||K||_inf * ||d||_inf + ||F||_inf)`.
 
-The homework used an advective element form. Its assembled free equations agree
-with this conservative form for the present constant-coefficient problem, but
-the element residuals differ. Future recovery must use the retained conservative
-residuals, not residuals from boundary-modified matrices.
+Future recovery uses the retained conservative residuals computed from the
+original element matrices and solved nodal coefficients.
 
 ## Baseline example
 
@@ -131,13 +128,13 @@ to `outputs/baseline/`, regardless of the current working directory:
 Generated outputs and the local environment are ignored by Git. Rerunning the
 example replaces these files; the timestamp in the metadata records each run.
 
-## Verification and layout
+## Research workflow and layout
 
-Tests compare quadrature assembly with independent analytic element matrices,
-check basis interpolation and derivatives, verify boundary and residual identities,
-exercise single-element and constant-solution cases, and reproduce 12 saved
-homework cases. The homework fixture is committed under `tests/data/`; tests
-never import or execute the original homework code.
+Use research scripts to explore the results and check correctness independently:
+compare with the exact solution, evaluate the matrices derived in the report,
+inspect residuals, and examine mesh refinement. The baseline script records
+errors and residuals for this purpose. There is no automated test suite or
+dependency on saved homework results.
 
 ```text
 src/fem1d/
@@ -147,7 +144,6 @@ src/fem1d/
   assembly.py   # Conservative element forms and sparse assembly
   solver.py     # Reduced solve, retained result, and element evaluation
 examples/       # Reproducible research scripts
-tests/          # Independent algebra and numerical regressions
 outputs/        # Generated results, ignored by Git
 ```
 

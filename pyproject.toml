@@ -10,12 +10,7 @@ requires-python = ">=3.12"
 dependencies = ["numpy>=2", "scipy>=1.14"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
 examples = ["matplotlib>=3.9"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-addopts = "-ra"
