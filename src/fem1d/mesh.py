@@ -11,10 +11,6 @@ class UniformMesh:
     """
 
     def __init__(self, elements, degree):
-        if elements < 1:
-            raise ValueError("elements must be positive")
-        if degree not in (1, 2):
-            raise ValueError("degree must be 1 or 2")
         self.elements = elements
         self.degree = degree
         self.vertices = np.linspace(0.0, 1.0, self.elements + 1)

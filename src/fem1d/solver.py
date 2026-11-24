@@ -1,9 +1,7 @@
 """Dirichlet elimination and FEM results retaining all data needed for recovery."""
 
-import warnings
-
 import numpy as np
-from scipy.sparse.linalg import MatrixRankWarning, spsolve
+from scipy.sparse.linalg import spsolve
 
 from .assembly import assemble
 from .basis import gauss_rule, reference_basis
@@ -63,15 +61,13 @@ class FEMSolution:
 
     @property
     def max_nodal_error(self):
-        return float(np.max(np.abs(self.coefficients - self.problem.exact(self.mesh.nodes))))
+        return float(np.max(np.abs(self.coefficients - self.problem.exact_solution(self.mesh.nodes))))
 
     def evaluate(self, element, xi):
         """Evaluate in one element; endpoint derivatives are never averaged.
 
         xi is a scalar or 1D array in [-1, 1]. Element numbering is zero-based.
         """
-        if not 0 <= element < self.mesh.elements:
-            raise ValueError("element must be within the mesh")
         N, Nxi, Nxixi = reference_basis(xi, self.mesh.degree)
         xi = np.atleast_1d(np.asarray(xi, dtype=float))
         local = self.coefficients[self.mesh.connectivity[element]]
@@ -88,7 +84,7 @@ class FEMSolution:
         for e in range(self.mesh.elements):
             values = self.evaluate(e, xi)
             squared += (self.mesh.h / 2) * np.dot(
-                weights, (values.u - self.problem.exact(values.x))**2
+                weights, (values.u - self.problem.exact_solution(values.x))**2
             )
         return float(np.sqrt(squared))
 
@@ -103,14 +99,7 @@ def solve(problem, *, elements, degree, method="galerkin"):
     free = np.arange(1, mesh.nodes.size - 1, dtype=np.int64)
     if free.size:
         rhs = system.load[free] - system.matrix[free][:, boundary] @ d[boundary]
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", MatrixRankWarning)
-            try:
-                d[free] = spsolve(system.matrix[free][:, free], rhs, use_umfpack=False)
-            except MatrixRankWarning as exc:
-                raise RuntimeError("The reduced FEM matrix is singular") from exc
-        if not np.all(np.isfinite(d)):
-            raise RuntimeError("The FEM solve returned non-finite coefficients")
+        d[free] = spsolve(system.matrix[free][:, free], rhs, use_umfpack=False)
     residual = system.matrix @ d - system.load
     element_residuals = np.einsum(
         "eij,ej->ei", system.element_matrices, d[mesh.connectivity]

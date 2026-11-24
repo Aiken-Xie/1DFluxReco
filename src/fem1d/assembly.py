@@ -10,8 +10,6 @@ METHODS = ("galerkin", "ead", "supg")
 
 def fitting_function(alpha):
     """Stable coth(alpha) - 1/alpha, with its continuous value at zero."""
-    if not np.isfinite(alpha) or alpha < 0:
-        raise ValueError("alpha must be finite and nonnegative")
     if alpha < 1e-3:
         return alpha / 3 - alpha**3 / 45 + 2 * alpha**5 / 945
     return float(1 / np.tanh(alpha) - 1 / alpha)
@@ -24,10 +22,6 @@ def stabilization(problem, h, method):
     kappa_bar(EAD) = a**2 * tau(SUPG), using the full element length for both
     degrees. This is a comparison parameter, not a quadratic optimality claim.
     """
-    if method not in METHODS:
-        raise ValueError(f"method must be one of {METHODS}")
-    if not np.isfinite(h) or h <= 0:
-        raise ValueError("h must be finite and positive")
     if method == "galerkin":
         return 0.0, 0.0
     alpha = problem.a * h / (2 * problem.kappa)

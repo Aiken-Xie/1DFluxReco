@@ -36,7 +36,7 @@ def main():
     for degree in (1, 2):
         for column, method in enumerate(METHODS):
             axis = axes[degree-1, column]
-            axis.plot(exact_x, PROBLEM.exact(exact_x), color="black", lw=1.4, label="Exact")
+            axis.plot(exact_x, PROBLEM.exact_solution(exact_x), color="black", lw=1.4, label="Exact")
             for elements, color in zip(ELEMENT_COUNTS, colors):
                 result = solve(PROBLEM, elements=elements, degree=degree, method=method)
                 key = f"p{degree}_{method}_n{elements}"

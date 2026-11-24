@@ -59,7 +59,8 @@ endpoints. `J_phys = a*u - kappa*du_dx` always uses the physical diffusivity.
 
 `l2_error(quadrature_order=20)` integrates the field error against the exact
 solution. Increasing the order provides a quadrature-resolution check. The exact
-solution uses shifted exponentials and `expm1` to handle small and large Péclet
+solution, available through `problem.exact_solution(x)`, uses shifted exponentials
+and `expm1` to handle small and large Péclet
 numbers without overflowing exponentials.
 
 ## Assembly and the reconstruction interface

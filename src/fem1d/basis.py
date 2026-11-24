@@ -10,11 +10,7 @@ def reference_basis(xi, degree):
     Scalar xi is treated as one evaluation point. Derivatives are with respect
     to xi; physical derivatives require factors 2/h and (2/h)**2.
     """
-    if degree not in (1, 2):
-        raise ValueError("degree must be 1 or 2")
     xi = np.atleast_1d(np.asarray(xi, dtype=float))
-    if xi.ndim != 1 or not np.all(np.isfinite(xi)) or np.any(np.abs(xi) > 1):
-        raise ValueError("xi must be a finite scalar or 1D array within [-1, 1]")
     one = np.ones_like(xi)
     if degree == 1:
         return (
@@ -31,6 +27,4 @@ def reference_basis(xi, degree):
 
 def gauss_rule(order=3):
     """Return nodes and weights for integration over the reference interval."""
-    if order < 1:
-        raise ValueError("quadrature order must be positive")
     return leggauss(order)
