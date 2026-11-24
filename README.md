@@ -1,4 +1,4 @@
-# One-dimensional FEM solver
+# 1DFluxReco
 
 Galerkin, exact artificial diffusion (EAD), and full SUPG for
 
