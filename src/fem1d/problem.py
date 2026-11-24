@@ -1,33 +1,25 @@
 """The constant-coefficient boundary-driven problem on [0, 1]."""
 
-from dataclasses import dataclass
-
 import numpy as np
-from numpy.typing import ArrayLike, NDArray
 
 
-@dataclass(frozen=True)
 class Problem:
     """Solve a*u_x - kappa*u_xx = 0 with two prescribed endpoint values."""
 
-    a: float = 1.0
-    kappa: float = 0.05
-    boundary_values: tuple[float, float] = (0.0, 10.0)
-
-    def __post_init__(self) -> None:
-        a, kappa = float(self.a), float(self.kappa)
+    def __init__(self, a=1.0, kappa=0.05, boundary_values=(0.0, 10.0)):
+        a, kappa = float(a), float(kappa)
         if not np.isfinite(a) or a <= 0:
             raise ValueError("a must be finite and positive")
         if not np.isfinite(kappa) or kappa <= 0:
             raise ValueError("kappa must be finite and positive")
-        values = tuple(float(value) for value in self.boundary_values)
+        values = tuple(float(value) for value in boundary_values)
         if len(values) != 2 or not np.all(np.isfinite(values)):
             raise ValueError("boundary_values must contain two finite values")
-        object.__setattr__(self, "a", a)
-        object.__setattr__(self, "kappa", kappa)
-        object.__setattr__(self, "boundary_values", values)
+        self.a = a
+        self.kappa = kappa
+        self.boundary_values = values
 
-    def exact(self, x: ArrayLike) -> NDArray[np.float64]:
+    def exact(self, x):
         """Evaluate the exact field without subtracting nearly equal exponentials.
 
         All exponential arguments are nonpositive, including at large a/kappa.
@@ -43,7 +35,7 @@ class Problem:
         left, right = self.boundary_values
         return left + (right - left) * fraction
 
-    def exact_flux(self) -> float:
+    def exact_flux(self):
         """Return the constant exact physical flux a*u - kappa*u_x."""
         lam = self.a / self.kappa
         left, right = self.boundary_values

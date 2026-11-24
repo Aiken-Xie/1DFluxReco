@@ -1,19 +1,14 @@
 """Conservative element forms, stabilization, and sparse global assembly."""
 
-from dataclasses import dataclass
-
 import numpy as np
-from numpy.typing import NDArray
-from scipy.sparse import coo_matrix, csr_matrix
+from scipy.sparse import coo_matrix
 
 from .basis import gauss_rule, reference_basis
-from .mesh import UniformMesh
-from .problem import Problem
 
 METHODS = ("galerkin", "ead", "supg")
 
 
-def fitting_function(alpha: float) -> float:
+def fitting_function(alpha):
     """Stable coth(alpha) - 1/alpha, with its continuous value at zero."""
     if not np.isfinite(alpha) or alpha < 0:
         raise ValueError("alpha must be finite and nonnegative")
@@ -22,7 +17,7 @@ def fitting_function(alpha: float) -> float:
     return float(1 / np.tanh(alpha) - 1 / alpha)
 
 
-def stabilization(problem: Problem, h: float, method: str) -> tuple[float, float]:
+def stabilization(problem, h, method):
     """Return active (tau, kappa_bar) coefficients for the selected method.
 
     EAD uses kappa_bar only; SUPG uses tau only. The fitted choices satisfy
@@ -42,9 +37,7 @@ def stabilization(problem: Problem, h: float, method: str) -> tuple[float, float
     return h * fit / (2 * problem.a), 0.0
 
 
-def local_system(
-    problem: Problem, h: float, degree: int, method: str
-) -> tuple[NDArray[np.float64], NDArray[np.float64], float, float]:
+def local_system(problem, h, degree, method):
     """Return (k, f, tau, kappa_bar) before any Dirichlet elimination.
 
     Rows are test indices, columns are trial indices. The Galerkin advection
@@ -68,20 +61,21 @@ def local_system(
     return k, np.zeros(degree + 1), tau, kappa_bar
 
 
-@dataclass(frozen=True)
 class AssembledSystem:
-    mesh: UniformMesh
-    problem: Problem
-    method: str
-    element_matrices: NDArray[np.float64]
-    element_loads: NDArray[np.float64]
-    tau_e: NDArray[np.float64]
-    kappa_bar_e: NDArray[np.float64]
-    matrix: csr_matrix
-    load: NDArray[np.float64]
+    def __init__(self, mesh, problem, method, element_matrices, element_loads,
+                 tau_e, kappa_bar_e, matrix, load):
+        self.mesh = mesh
+        self.problem = problem
+        self.method = method
+        self.element_matrices = element_matrices
+        self.element_loads = element_loads
+        self.tau_e = tau_e
+        self.kappa_bar_e = kappa_bar_e
+        self.matrix = matrix
+        self.load = load
 
 
-def assemble(problem: Problem, mesh: UniformMesh, method: str) -> AssembledSystem:
+def assemble(problem, mesh, method):
     """Assemble once from identical elements on this uniform constant problem."""
     k, f, tau, kappa_bar = local_system(problem, mesh.h, mesh.degree, method)
     element_matrices = np.repeat(k[None, :, :], mesh.elements, axis=0)

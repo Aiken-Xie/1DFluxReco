@@ -1,35 +1,29 @@
 """Dirichlet elimination and FEM results retaining all data needed for recovery."""
 
-from dataclasses import dataclass
-from numbers import Integral
 import warnings
 
 import numpy as np
-from numpy.typing import ArrayLike, NDArray
-from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import MatrixRankWarning, spsolve
 
 from .assembly import assemble
 from .basis import gauss_rule, reference_basis
 from .mesh import UniformMesh
-from .problem import Problem
 
 
-@dataclass(frozen=True)
 class Evaluation:
     """Element-local arrays, including when xi was a scalar.
 
     J_phys is the direct physical flux, not a reconstructed or stabilized flux.
     """
 
-    x: NDArray[np.float64]
-    u: NDArray[np.float64]
-    du_dx: NDArray[np.float64]
-    d2u_dx2: NDArray[np.float64]
-    J_phys: NDArray[np.float64]
+    def __init__(self, x, u, du_dx, d2u_dx2, J_phys):
+        self.x = x
+        self.u = u
+        self.du_dx = du_dx
+        self.d2u_dx2 = d2u_dx2
+        self.J_phys = J_phys
 
 
-@dataclass(frozen=True)
 class FEMSolution:
     """Original FEM field and unmodified conservative assembly data.
 
@@ -37,27 +31,30 @@ class FEMSolution:
     Only assembled free-node residuals vanish; boundary rows retain reactions.
     """
 
-    problem: Problem
-    mesh: UniformMesh
-    method: str
-    coefficients: NDArray[np.float64]
-    element_matrices: NDArray[np.float64]
-    element_loads: NDArray[np.float64]
-    tau_e: NDArray[np.float64]
-    kappa_bar_e: NDArray[np.float64]
-    matrix: csr_matrix
-    load: NDArray[np.float64]
-    free_dofs: NDArray[np.int64]
-    residual: NDArray[np.float64]
-    element_residuals: NDArray[np.float64]
+    def __init__(self, problem, mesh, method, coefficients, element_matrices,
+                 element_loads, tau_e, kappa_bar_e, matrix, load, free_dofs,
+                 residual, element_residuals):
+        self.problem = problem
+        self.mesh = mesh
+        self.method = method
+        self.coefficients = coefficients
+        self.element_matrices = element_matrices
+        self.element_loads = element_loads
+        self.tau_e = tau_e
+        self.kappa_bar_e = kappa_bar_e
+        self.matrix = matrix
+        self.load = load
+        self.free_dofs = free_dofs
+        self.residual = residual
+        self.element_residuals = element_residuals
 
     @property
-    def residual_inf(self) -> float:
+    def residual_inf(self):
         """Maximum assembled free-node residual; zero when no free nodes exist."""
         return float(np.max(np.abs(self.residual[self.free_dofs]), initial=0.0))
 
     @property
-    def scaled_residual_inf(self) -> float:
+    def scaled_residual_inf(self):
         """Scale by max(1, ||K||_inf ||d||_inf + ||F||_inf)."""
         matrix_norm = float(np.max(np.asarray(abs(self.matrix).sum(axis=1))))
         scale = max(1.0, matrix_norm * np.linalg.norm(self.coefficients, np.inf)
@@ -65,16 +62,16 @@ class FEMSolution:
         return self.residual_inf / scale
 
     @property
-    def max_nodal_error(self) -> float:
+    def max_nodal_error(self):
         return float(np.max(np.abs(self.coefficients - self.problem.exact(self.mesh.nodes))))
 
-    def evaluate(self, element: int, xi: ArrayLike) -> Evaluation:
+    def evaluate(self, element, xi):
         """Evaluate in one element; endpoint derivatives are never averaged.
 
         xi is a scalar or 1D array in [-1, 1]. Element numbering is zero-based.
         """
-        if isinstance(element, bool) or not isinstance(element, Integral) or not 0 <= element < self.mesh.elements:
-            raise ValueError("element must be an integer within the mesh")
+        if not 0 <= element < self.mesh.elements:
+            raise ValueError("element must be within the mesh")
         N, Nxi, Nxixi = reference_basis(xi, self.mesh.degree)
         xi = np.atleast_1d(np.asarray(xi, dtype=float))
         local = self.coefficients[self.mesh.connectivity[element]]
@@ -84,7 +81,7 @@ class FEMSolution:
         x = self.mesh.vertices[element] + (self.mesh.h / 2) * (xi + 1)
         return Evaluation(x, u, du_dx, d2u_dx2, self.problem.a * u - self.problem.kappa * du_dx)
 
-    def l2_error(self, quadrature_order: int = 20) -> float:
+    def l2_error(self, quadrature_order=20):
         """Field L2 error; increase quadrature_order to check layer resolution."""
         xi, weights = gauss_rule(quadrature_order)
         squared = 0.0
@@ -96,7 +93,7 @@ class FEMSolution:
         return float(np.sqrt(squared))
 
 
-def solve(problem: Problem, *, elements: int, degree: int, method: str = "galerkin") -> FEMSolution:
+def solve(problem, *, elements, degree, method="galerkin"):
     """Solve on a uniform mesh of [0, 1], preserving the original K, F, and k_e."""
     mesh = UniformMesh(elements, degree)
     system = assemble(problem, mesh, method)

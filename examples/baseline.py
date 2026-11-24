@@ -4,7 +4,6 @@ Run with: python examples/baseline.py (after installing .[examples]).
 Settings are ordinary Python values so this example also serves as a template.
 """
 
-from dataclasses import asdict
 from datetime import datetime, timezone
 import json
 import os
@@ -22,7 +21,7 @@ METHODS = ("galerkin", "ead", "supg")
 OUTPUT = Path(__file__).resolve().parents[1] / "outputs" / "baseline"
 
 
-def main() -> None:
+def main():
     OUTPUT.mkdir(parents=True, exist_ok=True)
     os.environ.setdefault("MPLCONFIGDIR", str(OUTPUT / ".matplotlib"))
     import matplotlib
@@ -76,7 +75,8 @@ def main() -> None:
     np.savez_compressed(OUTPUT / "solutions.npz", **arrays)
     metadata = dict(
         generated_utc=datetime.now(timezone.utc).isoformat(),
-        problem=asdict(PROBLEM), elements=list(ELEMENT_COUNTS), degrees=[1, 2], methods=list(METHODS),
+        problem=dict(a=PROBLEM.a, kappa=PROBLEM.kappa, boundary_values=PROBLEM.boundary_values),
+        elements=list(ELEMENT_COUNTS), degrees=[1, 2], methods=list(METHODS),
         cases=cases,
         quadrature=dict(assembly=3, field_error=20),
         peclet_convention="cell_Pe = a*h/kappa; alpha = cell_Pe/2; h is the full element length",
