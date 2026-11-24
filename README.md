@@ -117,13 +117,17 @@ original element matrices and solved nodal coefficients.
 giving 12 cases. Edit its Python settings to explore other parameters. It writes
 to `outputs/baseline/`, regardless of the current working directory:
 
-- `summary.csv`: parameters, degrees of freedom, active stabilization coefficients,
-  field and nodal errors, free residuals, and solution extrema.
 - `solutions.npz`: nodes, coefficients, connectivity, original element matrices,
   element residuals, and stabilization arrays. Keys use prefixes such as
   `p2_supg_n16_`; all arrays load with `np.load(..., allow_pickle=False)`.
+- `metadata.json`: shared problem settings, quadrature choices, dependency versions,
+  and a `cases` list with each case's method, degree, mesh size, stabilization
+  coefficients, errors, residuals, and solution extrema. Each case's `id` is the
+  prefix of its arrays in the NPZ file.
 - `profiles.png`: linear and quadratic solution profiles versus the exact field.
-- `metadata.json`: run settings, quadrature choices, and dependency versions.
+
+Numerical arrays live in the NPZ file; settings and scalar results live in JSON.
+There is no separate CSV summary.
 
 Generated outputs and the local environment are ignored by Git. Rerunning the
 example replaces these files; the timestamp in the metadata records each run.
