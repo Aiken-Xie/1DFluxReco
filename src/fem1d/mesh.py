@@ -1,24 +1,29 @@
-"""Uniform interval meshes with separate element endpoints and solution nodes."""
+"""Uniform interval meshes and the solution nodes belonging to each element."""
 
 import numpy as np
 
 
 class UniformMesh:
-    """An affine uniform mesh; local node ordering is always left to right.
+    """Uniform mesh; local node ordering is always left to right.
 
     Python element/node indices are zero-based. Degree 2 adds a solution node
-    at each element midpoint without splitting the original element.
+    at each element midpoint to accommodate quadratic elements.
     """
 
-    def __init__(self, elements, degree):
-        self.elements = elements
+    def __init__(self, N, degree):
+        # N: number of elements in [0, 1], a positive integer.
+        # degree: polynomial degree, 1 for linear or 2 for quadratic elements.
+        self.N = N
         self.degree = degree
-        self.vertices = np.linspace(0.0, 1.0, self.elements + 1)
-        self.nodes = np.linspace(0.0, 1.0, self.degree * self.elements + 1)
-        connectivity = self.degree * np.arange(self.elements)[:, None] + np.arange(self.degree + 1)
-        self.connectivity = connectivity
+        self.h = 1.0 / N  # Full element length for either degree.
 
-    @property
-    def h(self):
-        """Full original element length, including for quadratic elements."""
-        return 1.0 / self.elements
+        # Coordinates of all solution nodes: shape (N*degree+1,).
+        # Includes midpoint nodes for quadratic elements.
+        self.nodes = np.linspace(0.0, 1.0, self.degree * self.N + 1)
+
+        # Shape (N, degree+1); row e lists the global node indices in element e.
+        # Two elements: linear [[0, 1], [1, 2]], quadratic [[0, 1, 2], [2, 3, 4]].
+        self.elements = (
+            self.degree * np.arange(self.N)[:, None]
+            + np.arange(self.degree + 1)
+        )

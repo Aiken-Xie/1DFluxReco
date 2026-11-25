@@ -1,48 +1,54 @@
-"""Conservative element forms, stabilization, and sparse global assembly."""
+"""Conservative element forms, stabilization, and dense global assembly."""
 
 import numpy as np
-from scipy.sparse import coo_matrix
-
-from .basis import gauss_rule, reference_basis
-
-METHODS = ("galerkin", "ead", "supg")
+from numpy.polynomial.legendre import leggauss
 
 
-def fitting_function(alpha):
-    """Stable coth(alpha) - 1/alpha, with its continuous value at zero."""
-    if alpha < 1e-3:
-        return alpha / 3 - alpha**3 / 45 + 2 * alpha**5 / 945
-    return float(1 / np.tanh(alpha) - 1 / alpha)
+def shape_functions(xi, degree):
+    """Return N, N_xi, N_xixi, each shaped (local_nodes, evaluation_points).
 
-
-def stabilization(problem, h, method):
-    """Return active (tau, kappa_bar) coefficients for the selected method.
-
-    EAD uses kappa_bar only; SUPG uses tau only. The fitted choices satisfy
-    kappa_bar(EAD) = a**2 * tau(SUPG), using the full element length for both
-    degrees. This is a comparison parameter, not a quadratic optimality claim.
+    xi is a 1D NumPy array: quadrature points during assembly, or sampling
+    points when evaluating the solution. Derivatives are with respect to xi;
+    physical derivatives require factors 2/h and (2/h)**2.
     """
-    if method == "galerkin":
-        return 0.0, 0.0
-    alpha = problem.a * h / (2 * problem.kappa)
-    fit = fitting_function(alpha)
-    if method == "ead":
-        return 0.0, problem.a * h * fit / 2
-    return h * fit / (2 * problem.a), 0.0
+    one = np.ones(len(xi))
+    if degree == 1:
+        return (
+            np.array([(1 - xi) / 2, (1 + xi) / 2]),
+            np.array([-one / 2, one / 2]),
+            np.zeros((2, xi.size)),
+        )
+    elif degree == 2:
+        return (
+            np.array([xi * (xi - 1) / 2, 1 - xi**2, xi * (xi + 1) / 2]),
+            np.array([xi - 0.5, -2 * xi, xi + 0.5]),
+            np.array([one, -2 * one, one]),
+        )
+    else:
+        raise NotImplementedError("Only linear and quadratic elements are implemented")
 
 
-def local_system(problem, h, degree, method):
-    """Return (k, f, tau, kappa_bar) before any Dirichlet elimination.
+def element_stiffness(problem, h, degree, method):
+    """Return (k, tau, kappa_bar) before any Dirichlet elimination.
 
     Rows are test indices, columns are trial indices. The Galerkin advection
     entry is -integral(a*N_i,x*N_j), as in the reference report. It differs
     from the homework's advective form at element boundary contributions.
     """
-    tau, kappa_bar = stabilization(problem, h, method)
-    xi, weights = gauss_rule(3)
-    N, Nxi, Nxixi = reference_basis(xi, degree)
+    # EAD uses artificial diffusion; SUPG uses tau. Galerkin uses neither.
+    tau, kappa_bar = 0.0, 0.0
+    if method != "galerkin":
+        alpha = problem.a * h / (2 * problem.kappa)
+        fit = 1 / np.tanh(alpha) - 1 / alpha
+        if method == "ead":
+            kappa_bar = problem.a * h * fit / 2
+        else:
+            tau = h * fit / (2 * problem.a)
+
+    xi, weights = leggauss(3)  # Each has shape (3,).
+    N, Nxi, Nxixi = shape_functions(xi, degree)  # Each: (degree+1, 3).
     Nx, Nxx = (2 / h) * Nxi, (2 / h)**2 * Nxixi
-    k = np.zeros((degree + 1, degree + 1))
+    k = np.zeros((degree + 1, degree + 1))  # (degree+1, degree+1).
     for q, weight in enumerate(weights):
         integrand = (
             -problem.a * np.outer(Nx[:, q], N[:, q])
@@ -52,38 +58,31 @@ def local_system(problem, h, degree, method):
             )
         )
         k += weight * (h / 2) * integrand
-    return k, np.zeros(degree + 1), tau, kappa_bar
+    return k, tau, kappa_bar
 
 
-class AssembledSystem:
-    def __init__(self, mesh, problem, method, element_matrices, element_loads,
-                 tau_e, kappa_bar_e, matrix, load):
-        self.mesh = mesh
-        self.problem = problem
-        self.method = method
-        self.element_matrices = element_matrices
-        self.element_loads = element_loads
-        self.tau_e = tau_e
-        self.kappa_bar_e = kappa_bar_e
-        self.matrix = matrix
-        self.load = load
+class AssemblyData:
+    def __init__(self, mesh, problem, method, element_matrices,
+                 tau_e, kappa_bar_e, stiffness_matrix):
+        self.mesh = mesh        # UniformMesh object.
+        self.problem = problem  # Problem object.
+        self.method = method    # String: one of ("galerkin", "ead", "supg").
+        # N = mesh.N, p = mesh.degree, n = N*p + 1 global nodes.
+        self.element_matrices = element_matrices  # (N, p+1, p+1).
+        self.tau_e = tau_e                        # (N,).
+        self.kappa_bar_e = kappa_bar_e            # (N,).
+        self.stiffness_matrix = stiffness_matrix  # Dense global stiffness matrix (n, n).
 
 
-def assemble(problem, mesh, method):
+def assemble_stiffness(problem, mesh, method):
     """Assemble once from identical elements on this uniform constant problem."""
-    k, f, tau, kappa_bar = local_system(problem, mesh.h, mesh.degree, method)
-    element_matrices = np.repeat(k[None, :, :], mesh.elements, axis=0)
-    element_loads = np.repeat(f[None, :], mesh.elements, axis=0)
-    local_nodes = mesh.degree + 1
-    rows = np.repeat(mesh.connectivity, local_nodes, axis=1).ravel()
-    columns = np.tile(mesh.connectivity, (1, local_nodes)).ravel()
-    matrix = coo_matrix(
-        (element_matrices.ravel(), (rows, columns)),
-        shape=(mesh.nodes.size, mesh.nodes.size),
-    ).tocsr()
-    load = np.zeros(mesh.nodes.size)
-    np.add.at(load, mesh.connectivity.ravel(), element_loads.ravel())
-    return AssembledSystem(
-        mesh, problem, method, element_matrices, element_loads,
-        np.full(mesh.elements, tau), np.full(mesh.elements, kappa_bar), matrix, load,
+    k, tau, kappa_bar = element_stiffness(problem, mesh.h, mesh.degree, method)
+    element_matrices = np.repeat(k[None, :, :], mesh.N, axis=0)
+    stiffness_matrix = np.zeros((mesh.nodes.size, mesh.nodes.size))
+    for nodes in mesh.elements:
+        # Add the local matrix into this element's global rows and columns.
+        stiffness_matrix[np.ix_(nodes, nodes)] += k
+    return AssemblyData(
+        mesh, problem, method, element_matrices,
+        np.full(mesh.N, tau), np.full(mesh.N, kappa_bar), stiffness_matrix,
     )
