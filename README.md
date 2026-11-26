@@ -1,8 +1,26 @@
 # 1DFluxReco
 
+This repository contains the code for the final project in MECEE6106, *Finite Element Method for Fluid Flow and Fluid-Structure Interactions*. The project studies conservative flux reconstruction for a source-free, one-dimensional advection–diffusion problem. It compares Galerkin, exact artificial diffusion (EAD), and streamline upwind Petrov–Galerkin (SUPG) with linear and quadratic elements.
+
+## Repository structure
+
+```text
+src/fem1d/              Finite element solver and flux reconstruction
+  problem.py            Problem parameters and exact solution and flux
+  mesh.py               Uniform mesh and element-to-node mapping
+  assembly.py           Shape functions and stiffness matrix assembly
+  solver.py             Finite element solve and direct flux evaluation
+  flux_reco.py          Conservative flux reconstruction and evaluation
+scripts/
+  solve_and_reco.py     Solve and reconstruct the 36 refinement cases
+  convergence.py        Compute and plot solution and flux L2 errors
+  conservation.py       Check control-volume balances and face-flux accuracy
+pyproject.toml          Package setup and dependencies
+```
+
 ## Install and run
 
-From the repository directory, using Python 3.12 or newer:
+Use Python 3.12 or newer. From the repository directory, create a virtual environment, install the package with its script dependencies, and run the scripts in order.
 
 ```bash
 python3.12 -m venv .venv
@@ -12,6 +30,8 @@ python3.12 -m venv .venv
 .venv/bin/python scripts/convergence.py
 .venv/bin/python scripts/conservation.py
 ```
+
+The first script saves the solution and reconstruction coefficients, case settings, and solution profiles in `outputs/baseline/`. The analysis scripts read the saved coefficients, print the numerical results, and save the refinement plots in `outputs/baseline/figures/`.
 
 ## Python API
 

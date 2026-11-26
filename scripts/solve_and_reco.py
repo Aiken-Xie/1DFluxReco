@@ -14,7 +14,7 @@ from tqdm import tqdm
 from fem1d import FEMSolver, FluxReconstruction, Problem
 
 PROBLEM = Problem(a=1., kappa=.05, boundary_values=(0., 10.))
-ELEMENT_COUNTS = (4, 16)
+ELEMENT_COUNTS = (4, 8, 16, 32, 64, 128)
 METHODS = ("galerkin", "ead", "supg")
 OUTPUT = Path(__file__).resolve().parents[1] / "outputs" / "baseline"
 
@@ -97,17 +97,19 @@ def main():
     figure, axes = plt.subplots(2, 3, figsize=(12, 7.5), sharex=True, sharey="row", layout="constrained")
     exact_x = np.linspace(0., 1., 1001)
     profiles = np.linspace(-1., 1., 51)
-    colors = ("#d55e00", "#0072b2")
+    colors = plt.cm.viridis(np.linspace(0.1, 0.9, len(ELEMENT_COUNTS)))
     for degree in (1, 2):
         for column, method in enumerate(METHODS):
             axis = axes[degree-1, column]
             axis.plot(exact_x, PROBLEM.exact_solution(exact_x), color="black", lw=1.4, label="Exact")
-            for N, color in zip(ELEMENT_COUNTS, colors):
+            for index, (N, color) in enumerate(zip(ELEMENT_COUNTS, colors)):
                 result = solutions[degree, method, N]
                 x, u, _, _, _ = result.evaluate(np.arange(N), profiles)  # (N, len(profiles)).
+                zorder = 2 + len(ELEMENT_COUNTS) - index  # Draw smaller N on top.
                 axis.plot(x.ravel(), u.ravel(), color=color,
-                          lw=1.2, label=f"N = {N}")
-                axis.plot(result.mesh.nodes, result.coefficients, "o", color=color, ms=2.5)
+                          lw=1.2, label=f"N = {N}", zorder=zorder)
+                axis.plot(result.mesh.nodes, result.coefficients, "o", color=color,
+                          ms=2.5, zorder=zorder)
             axis.set_title(f"{'Linear' if degree == 1 else 'Quadratic'} / {method.upper() if method != 'galerkin' else 'Galerkin'}")
             axis.grid(alpha=.2)
             axis.legend(fontsize=8)

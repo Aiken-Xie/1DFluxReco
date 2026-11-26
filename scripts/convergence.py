@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 
@@ -56,6 +57,80 @@ def main():
     for i, case in enumerate(cases):
         values = " ".join(f"{errors[name][i]:12.5e}" for name in error_names)
         print(f"{case['id']:<22} {values}")
+
+    methods = ("galerkin", "ead", "supg")
+    labels = ("Galerkin", "EAD", "SUPG")
+    colors = ("#0072B2", "#D55E00", "#009E73")
+    markers = ("o", "s", "x")
+    rates = {}
+    figures = INPUT / "figures"
+    figures.mkdir(exist_ok=True)
+    plt.rcParams.update({"font.size": 12})
+    solution_figure, solution_axes = plt.subplots(1, 2, figsize=(10, 4), layout="constrained")
+    solution_figure.suptitle("Convergence of Linear vs Quadratic Elements")
+    flux_figure, flux_axes = plt.subplots(2, 3, figsize=(12, 7), layout="constrained")
+    print("\nObserved rates, N=64 to 128 (absolute L2 errors)")
+    print(f"{'Degree / method':<22} {'u':>10} {'J_phys':>10} {'J_hat':>10}")
+    for row, degree in enumerate((1, 2)):
+        finest_errors = {}
+        for col, (method, label, color, marker) in enumerate(zip(methods, labels, colors, markers)):
+            indices = [i for i, case in enumerate(cases)
+                       if case["degree"] == degree and case["method"] == method]
+            counts = np.array([cases[i]["N"] for i in indices])
+            h = np.array([cases[i]["h"] for i in indices])
+            rates[degree, method] = {
+                name: np.log(errors[name][indices[:-1]] / errors[name][indices[1:]])
+                / np.log(h[:-1] / h[1:]) for name in error_names
+            }
+            last_rates = rates[degree, method]
+            print(f"{str(degree) + ' / ' + label:<22} "
+                  f"{last_rates['solution_L2'][-1]:10.3f} "
+                  f"{last_rates['direct_flux_L2'][-1]:10.3f} "
+                  f"{last_rates['reconstructed_flux_L2'][-1]:10.3f}")
+            solution_axes[row].loglog(counts, errors["solution_L2"][indices],
+                                      color=color, marker=marker, fillstyle="none", label=label)
+            finest_errors[method] = errors["solution_L2"][indices[-1]]
+            ax = flux_axes[row, col]
+            direct_errors = errors["direct_flux_L2"][indices]
+            reconstructed_errors = errors["reconstructed_flux_L2"][indices]
+            ax.loglog(counts, direct_errors, "o-",
+                      color="#0072B2", fillstyle="none", label="Direct physical")
+            ax.loglog(counts, reconstructed_errors, "x--",
+                      color="#D55E00", label="Reconstructed physical")
+            reference_anchor = 0.35 * min(direct_errors[-1], reconstructed_errors[-1])
+            ax.loglog(counts, reference_anchor * (counts[-1] / counts)**degree,
+                      color="0.35", linestyle="-." if degree == 1 else ":",
+                      label="First-order reference" if degree == 1 else "Second-order reference")
+            ax.set(title=f"{'Linear' if degree == 1 else 'Quadratic'} / {label}",
+                   xlabel="Number of elements N", ylabel="Flux L2 error")
+            ax.set_xticks(counts, labels=counts)
+            ax.grid(True, which="major", alpha=0.2)
+        references = ((2, "galerkin", ":"),) if degree == 1 else (
+            (2, "ead", ":"),
+            (3, "galerkin", "--"),
+        )
+        for order, method, linestyle in references:
+            # Offset the guide below the corresponding error at the finest mesh.
+            reference_errors = 0.35 * finest_errors[method] * (counts[-1] / counts)**order
+            solution_axes[row].loglog(
+                counts, reference_errors, color="0.35", linestyle=linestyle,
+                label="Second-order reference" if order == 2 else "Third-order reference",
+            )
+        solution_axes[row].set(title="Linear elements" if degree == 1 else "Quadratic elements",
+                               xlabel="Number of elements N", ylabel="Solution L2 error")
+        solution_axes[row].set_xticks(counts, labels=counts)
+        solution_axes[row].grid(True, which="major", alpha=0.2)
+    handles, labels = solution_axes[1].get_legend_handles_labels()
+    solution_figure.legend(handles, labels, fontsize=11, ncols=5, loc="outside lower center")
+    handles, labels = flux_axes[0, 0].get_legend_handles_labels()
+    quadratic_handles, quadratic_labels = flux_axes[1, 0].get_legend_handles_labels()
+    flux_figure.legend(handles + quadratic_handles[-1:], labels + quadratic_labels[-1:],
+                       fontsize=11, ncols=4, loc="outside lower center")
+    solution_figure.savefig(figures / "solution_convergence.png", dpi=220)
+    flux_figure.savefig(figures / "flux_convergence.png", dpi=220)
+    plt.close(solution_figure)
+    plt.close(flux_figure)
+    return cases, errors, rates
 
 
 if __name__ == "__main__":

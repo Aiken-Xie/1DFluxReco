@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 
@@ -17,10 +18,8 @@ def main():
     cases = metadata["cases"]
     flux_names = ("direct", "reconstructed")
     J_exact = problem.exact_flux()
-    flux_scale = problem.a * abs(problem.boundary_values[1] - problem.boundary_values[0])
     # Summary arrays: (number of cases,). Per-case defects: (N*degree-1,).
     max_defects = {name: np.zeros(len(cases)) for name in flux_names}
-    scaled_max_defects = {name: np.zeros(len(cases)) for name in flux_names}
     max_face_errors = {name: np.zeros(len(cases)) for name in flux_names}
     defects, node_positions = {}, {}
 
@@ -61,22 +60,64 @@ def main():
                 J_right = ordered_flux[1:]
                 defects[key][name] = J_right - J_left  # Net outward flux; zero for no forcing.
                 max_defects[name][i] = np.max(np.abs(defects[key][name]), initial=0.0)
-                scaled_max_defects[name][i] = max_defects[name][i] / flux_scale
 
     print(
         f"{'Case':<22} {'Direct max':>13} {'Recovered max':>14} "
-        f"{'Direct scaled':>14} {'Recovered scaled':>17} "
         f"{'Direct face error':>18} {'Recovered face error':>21}"
     )
     for i, case in enumerate(cases):
         print(
             f"{case['id']:<22} {max_defects['direct'][i]:13.5e} "
             f"{max_defects['reconstructed'][i]:14.5e} "
-            f"{scaled_max_defects['direct'][i]:14.5e} "
-            f"{scaled_max_defects['reconstructed'][i]:17.5e} "
             f"{max_face_errors['direct'][i]:18.5e} "
             f"{max_face_errors['reconstructed'][i]:21.5e}"
         )
+
+    figures = INPUT / "figures"
+    figures.mkdir(exist_ok=True)
+    plt.rcParams.update({"font.size": 12})
+    # Separate panels keep the roundoff plateau visible for each element degree.
+    for values, filename, ylabel in (
+        (max_defects, "conservation_refinement.png", r"$E_{\mathrm{conservation}}$"),
+        (max_face_errors, "face_flux_refinement.png", r"$E_{\mathrm{face}}$"),
+    ):
+        figure, axes = plt.subplots(1, 2, figsize=(11, 4.8), layout="constrained")
+        for ax, degree in zip(axes, (1, 2)):
+            for method, label, color in zip(
+                ("galerkin", "ead", "supg"), ("Galerkin", "EAD", "SUPG"),
+                ("#0072B2", "#D55E00", "#009E73"),
+            ):
+                indices = [i for i, case in enumerate(cases)
+                           if case["degree"] == degree and case["method"] == method]
+                counts = np.array([cases[i]["N"] for i in indices])
+                direct_style = "s-" if values is max_face_errors and method == "ead" else "o-"
+                ax.loglog(counts, values["direct"][indices], direct_style, color=color,
+                          fillstyle="none", label=f"{label}: direct")
+                ax.loglog(counts, values["reconstructed"][indices], "x--", color=color,
+                          label=f"{label}: reconstructed")
+                if values is max_face_errors and method == "supg":
+                    second_order_anchor = 0.25 * values["direct"][indices[-1]]
+                    ax.loglog(counts, second_order_anchor * (counts[-1] / counts)**2,
+                              color="0.35", linestyle=":", label="Second-order reference")
+                    if degree == 2:
+                        fourth_order_anchor = 0.35 * values["reconstructed"][indices[-2]]
+                        ax.loglog(counts, fourth_order_anchor * (counts[-2] / counts)**4,
+                                  color="0.35", linestyle="-.", label="Fourth-order reference")
+            ax.set(title="Linear elements" if degree == 1 else "Quadratic elements",
+                   xlabel="Number of elements N", ylabel=ylabel)
+            ax.set_xticks(counts, labels=counts)
+            ax.grid(True, which="major", alpha=0.2)
+        handles, labels = axes[0].get_legend_handles_labels()
+        if values is max_face_errors:
+            quadratic_handles, quadratic_labels = axes[1].get_legend_handles_labels()
+            handles.append(quadratic_handles[-1])
+            labels.append(quadratic_labels[-1])
+            figure.legend(handles, labels, fontsize=10, ncols=4, loc="outside lower center")
+        else:
+            figure.legend(handles, labels, fontsize=12, ncols=3, loc="outside lower center")
+        figure.savefig(figures / filename, dpi=220)
+        plt.close(figure)
+    return cases, max_defects, max_face_errors
 
 
 if __name__ == "__main__":
